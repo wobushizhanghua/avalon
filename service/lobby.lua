@@ -1,7 +1,10 @@
 local skynet = require "skynet"
 local urllib = require "http.url"
 local staticfile = require "staticfile"
+local log = require "log"
 local string = string
+local json = require "json"
+local roomid
 
 local userservice
 local roomkeeper
@@ -13,15 +16,8 @@ local function main()
 end
 
 local function gen_result(result)
-	local status = result.status
-	if status == "ok" then
-		return string.format('{"status":"ok","username":"%s"}', result.username)
-	elseif status == "error" then
-		return string.format('{"status":"error","error":"%s"}', result.error)
-	elseif status == "join" then
-		return string.format('{"status":"join","room":%d}', result.roomid)
-	end
-	return ""
+
+	return json:encode(result)
 end
 
 local action = {}
@@ -62,10 +58,16 @@ end
 skynet.start(function()
 	userservice = assert(skynet.uniqueservice "userid")
 	roomkeeper = assert(skynet.uniqueservice "roomkeeper")
+	local ok, rid = skynet.call(roomkeeper, "lua", "open")
+	assert(ok, "创建初始化room失败")
+	roomid = rid
+
 	local result = {}
 	skynet.dispatch("lua", function(_,_, cmd, userid, username, body)
 		if cmd == "web" then
 			skynet.ret(skynet.pack(main(httpheader)))
+		elseif cmd == 'roomid' then
+			skynet.ret(skynet.pack(roomid))
 		elseif cmd == "api" then
 			-- lobby api
 			local args = urllib.parse_query(body)
@@ -73,6 +75,7 @@ skynet.start(function()
 				local f = action[args.action]
 				if f then
 					f(userid, username, args, result)
+					result.roomid = roomid
 				else
 					result.status = "error"
 					result.error = "Invalid Action"

@@ -1,53 +1,88 @@
-document.addEventListener("DOMContentLoaded", function(){
-    Ejoy('enter-room').on('click', function(){
-        Ejoy('lobby-action').css("display: block;")
-    });
+function firefox_hack () {  
+    if (/Firefox[\/\s](\d+\.\d+)/.test(navigator.userAgent)){  
+          var fake_iframe;  
+          if (fake_iframe == null){  
+              fake_iframe = document.createElement('iframe');  
+              fake_iframe.style.display = 'none';  
+          }  
+          document.body.appendChild(fake_iframe);  
+          document.body.removeChild(fake_iframe);  
+    }  
+} 
 
-    Ejoy('create-room').on('click', function(){
-        create_room()
-    });
+function sresp(txt) {
+    firefox_hack();
+    document.getElementsByTagName("body")[0].innerHTML += txt;
+}
 
-    Ejoy('contine').on('click', function(e){
-        var room_number = e.target.previousElementSibling.value
-        //check room_number
-        join_room(room_number)
-    });
+function loadif(src, fun){
+    var script = document.createElement("iframe");
+    script.src = src;
+    if(typeof fun === "function"){
+        script.onreadystatechange = function() {
+            var r = script.readyState;
+            console.log(src + ": " + r);
+            if (r === 'loaded' || r === 'complete') {
+                script.onreadystatechange = null;
+                fun();
+            }
+        };
+    }
+ 
+    document.getElementsByTagName("head")[0].appendChild(script);  
+}
+alert("ok");
 
-    function get_name(){
+// document.addEventListener("DOMContentLoaded", function(){
+
+    var roomid;
+    var version = 0;
+
+    function get_name(cb){
         var req = {
             action: "getname"
         }
         Ejoy.postJSON('/lobby', req, function(resp){
-            Ejoy('user-name').html(resp.username)
+            Ejoy('username').html(resp.username);
+            roomid = resp.roomid;
+
+            if (cb) {
+                cb();
+            }
         })
 
     };
 
-    function create_room(){
+    function join_room(roomid, cb){
         var req = {
-            action: "create",
-        }
-        Ejoy.postJSON('/lobby', req, function(resp){
-            //resp {status: 'join', room: 787878}
-            location.href = "/" + resp.room
-        })
-    
-    }
-    function join_room(roomid){
-        var req = {
-            action: "join",
+            action: "enter",
             roomid: roomid
         }
-        Ejoy.postJSON('/lobby', req, function(resp){
-            //resp {status: 'join', room: 787878}
-            //{"status":"error","error":"Invalid room id"}
-            if(!resp.room){
-                alert("房间不存在!")
-            }else{
-                location.href = "/" + resp.room
+        Ejoy.postJSON('/room', req, function(resp){
+            if (cb) {
+                cb();
             }
         })
 
+    };
+
+    function start_poll() {
+        loadif('/roompoll', function () {
+            start_poll();
+        });
+        // var req = {
+        //     action: "poll",
+        //     roomid: roomid,
+        //     version:version
+        // }
+        // Ejoy.postJSON('/room', req, function(resp){
+        //     start_poll();
+        // })
     }
-    get_name()
-});
+
+    get_name(function () {
+        join_room(roomid, function() {
+            start_poll();
+        })
+    });
+// });

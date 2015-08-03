@@ -7,6 +7,7 @@ local log = require "log"
 local staticfile = require "staticfile"
 
 local roomkeeper
+local roomid
 local userservice
 local lobby
 local address_table = {}
@@ -34,6 +35,16 @@ local function get_userid(header)
 		end
 	end
 	return skynet.call(userservice, "lua", userid)
+end
+
+local function get_roomid()
+	if roomid then
+		return roomid
+	else
+		roomid = skynet.call(lobby, "lua", "roomid")
+		log.printf("roomid is %d", roomid)
+		return roomid
+	end
 end
 
 local userid_header = setmetatable({} , { __mode = "kv",
@@ -73,6 +84,29 @@ action_method["/room"] = function(body, userid, username)
 	return skynet.call(r, "lua", "api", args)
 end
 
+action_method["/roompoll"] = function(body, userid, username)
+	local args = urllib.parse_query(body)
+	if not args then
+		return '{"status":"error","error":"Invalid Action"}'
+	end
+	local roomid = get_roomid()
+	if not roomid then
+		return '{"status":"error","error":"Invalid Room id"}'
+	end
+	local r = skynet.call(roomkeeper, "lua", "query", roomid)
+	if not r then
+		return '{"status":"error","error":"Room not open"}'
+	end
+	args.userid = userid
+	args.action = 'roompoll'
+	--这里返回一个函数作为response函数， 可以使得body按chunk输出
+	--外面会反复调用这个函数直到返回空字符串或者nil
+	return function () 
+		return skynet.call(r, "lua", "poll", args)
+	end
+end
+
+
 local function dispatch_room(room, userid, username)
 	local r = skynet.call(roomkeeper, "lua", "query", room)
 	if not r then
@@ -90,6 +124,7 @@ local function handle_socket(id)
 			response(id, code)
 		else
 			local action = urllib.parse(url)
+			print(action)
 			local offset = action:find("/",2,true)
 			if offset then
 				local path = action:sub(1,offset-1)

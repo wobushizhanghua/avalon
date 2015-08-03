@@ -58,9 +58,8 @@ local function enter_room(userid, username)
 	R.cache = nil
 end
 
-function room.web(userid, username)
+function room.enter(userid, username)
 	enter_room(userid, username)
-	return content
 end
 
 local function update_status()
@@ -180,37 +179,6 @@ function api.kick(args)
 	return '{"status":"ok"}'
 end
 
-function api.set(args)
-	local rule = tonumber(args.rule)
-	local enable = (args.enable == 'true')
-
-	local updated = false
-	if enable then
-		if not R.rules[rule] then
-			R.rules[rule] = true
-			updated = true
-		end
-	else
-		if R.rules[rule] then
-			R.rules[rule] = nil
-			updated = true
-		end
-	end
-
-	if updated then
-		for _, u in pairs(R.user_tbl) do
-			if u.status == READY then
-				u.status = NOTREADY
-			end
-		end
-		R.version = R.version + 1
-		R.cache = nil
-		update_status()
-	end
-
-	return '{"status":"ok"}'
-end
-
 function api.request(args)
 	local userid = args.userid
 	local version = tonumber(args.version)
@@ -284,11 +252,19 @@ function room.init(id)
 	log.printf("[Room:%d] open", id)
 end
 
+
+function room.poll(args)
+	skynet.sleep(100)
+	return "<script>top.sresp('<div>111111</div>\\n');</script>\n"
+end	
+
 skynet.start(function()
 	roomkeeper = assert(skynet.uniqueservice "roomkeeper")
 	userservice = assert(skynet.uniqueservice "userid")
 	skynet.fork(heartbeat)
 	skynet.dispatch("lua", function (_,_,cmd,...)
+		log.printf("romm get cmd %s", cmd)
+		log.var_dump({...})
 		alive = skynet.now()
 		local f = room[cmd]
 		if f then
